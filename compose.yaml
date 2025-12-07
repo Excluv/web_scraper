@@ -1,0 +1,11 @@
+services:
+    python:
+        image: python_playwright
+        container_name: scraper_python
+        working_dir: /scraper
+        volumes:
+            - ./scraper:/scraper
+        env_file:
+            - ./scraper/.env
+        command: >
+            sh -c "pip install -r requirements.txt && tail -f /dev/null"

@@ -1,0 +1,6 @@
+# Config files
+*.vscode
+*.env
+
+# Log files
+logs
