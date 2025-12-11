@@ -12,7 +12,8 @@ class Spider:
                         proxy: str = None):
         raise NotImplementedError
     
-    def process_response(self, response: dict):
+    def process_response(self, 
+                         response: dict):
         raise NotImplementedError
 
 

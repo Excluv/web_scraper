@@ -2,6 +2,7 @@ from typing import Self, Union, Optional
 
 from WebComponent.spider import SpiderFactory
 from WebComponent.fetcher import SingletonBrowser, Proxy
+from ExtractorComponent.processor import ContentProcessor
 from ExtractorComponent.extractor import ContentExtractor
 from dbinterface import DbInterface
 from logger import ScraperLogger
@@ -110,6 +111,7 @@ class SpiderEngine:
         self.browser = await SingletonBrowser.get_instance(proxy.random())
         self.spider = SpiderFactory().create(from_source, proxy.random())
         self.site_map = SingletonSitemap()
+        self.preprocessor = ContentProcessor()
         self.extractor = ContentExtractor()
         self.db = DbInterface()
 
@@ -129,8 +131,9 @@ class SpiderEngine:
             response_data = self.spider.process_response(response)
             self.expand_site_map(response["hyper_links"])
 
-            content = self.extractor.process_content(response_data["html"])
-            await self.db.save(content)
+            content = self.preprocessor.process_content(response_data["html"])
+            true_content = self.extractor.get(content)
+            await self.db.save(true_content)
 
     async def close(self):
         await self.browser.close()
