@@ -1,3 +1,12 @@
+import os
+from dotenv import load_dotenv
+
+# Global parameters
+load_dotenv("chat_bot_config.env")
+ALPHA = os.environ.get("ALPHA") # Weights between content-content and title-content
+PERCENTILE = os.environ.get("PERCENTILE") # Min-threshold for an aggregate similarity score
+N_CLUSTERS = os.environ.get("N_CLUSTERS") # No. predefined clusters in a corpus
+
 import numpy as np
 from bs4 import BeautifulSoup
 from sklearn.metrics.pairwise import cosine_similarity
@@ -17,28 +26,23 @@ class Postprocessor:
                  title_embeddings: np.ndarray[float]):
         self.text_embeddings = text_embeddings
         self.title_embeddings = title_embeddings
-        self.self_similarity_matrix = self._calc_similarity(text_embeddings)
-        self.title_similarity_matrix = self._calc_similarity(text_embeddings, title_embeddings)
-        self.mask = self._get_mask()
+        
+    def find_top_k(self) -> np.ndarray:
+        text_text_sim_matrix = cosine_similarity(self.text_embeddings)
+        text_title_sim_matrix = cosine_similarity(self.text_embeddings, self.title_embeddings)
 
-    def _get_mask(self):
-        n_rows, n_cols = self.self_similarity_matrix.shape
-        mask = []
-        for i in range(n_rows):
-            for j in range(n_cols):
-                if i + j >= n_cols:
-                    break
-                if i == j:
-                    continue
-                mask.append([i, i + j])
+        mask = ~np.eye(text_text_sim_matrix, dtype=bool)
+        row_sums = (text_text_sim_matrix * mask).sum(axis=1)
+        row_counts = mask.sum(axis=1)
+        text_text_avg_sim_matrix = row_sums / row_counts
 
-        return mask
-
-    def _calc_similarity(self,
-                         X: np.ndarray[float], 
-                         y: np.ndarray[float] = None):
-        similarities = cosine_similarity(X, y)
-        return similarities
-
+        agg_sim_matrix = (
+            ALPHA * text_text_avg_sim_matrix
+            + (1 - ALPHA) * text_title_sim_matrix
+        )
+        threshold = np.percentile(agg_sim_matrix, PERCENTILE)
+        self.selected_idx = np.where(agg_sim_matrix >= threshold)
+    
     def cluster(self):
-        pass
+        self.find_top_k()
+        relevant_text_nodes = self.text_embeddings[self.selected_idx]

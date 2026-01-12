@@ -25,9 +25,12 @@ class Node:
 
         return depth
     
+    def __lte__(self, node: Self) -> bool:
+        return self.depth <= node.depth
+    
     def __lt__(self, node: Self) -> bool:
         return self.depth < node.depth
-    
+
     def __gt__(self, node: Self) -> bool:
         return self.depth > node.depth
 
@@ -60,11 +63,11 @@ class HeapQueue:
         self.heap_size += 1
         idx = self.heap_size - 1
         self.heapq[idx] = Node(url)
-        while (idx != 0) and (self.heapq[self._parent(idx)] > self.heapq[idx]):
+        while idx != 0 and self.heapq[self._parent(idx)] > self.heapq[idx]:
             self.heapq[idx], self.heapq[self._parent(idx)] = self._swap(self.heapq[idx], self.heapq[self._parent(idx)])
             idx = self._parent(idx)
 
-    def min_heapify(self,idx: int) -> None:
+    def min_heapify(self, idx: int) -> None:
         left = self._left(idx)
         right = self._right(idx)
         smallest = idx
