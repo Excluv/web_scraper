@@ -59,6 +59,7 @@ class RemoteClient(LlmClient):
             ).embeddings
         ])
         normed_embedding = embeddings / np.linalg.norm(embeddings, axis=1, keep_dims=True)
+        
         return normed_embedding
     
 

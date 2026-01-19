@@ -1,8 +1,8 @@
+import asyncio
 from typing import Self, Union, Optional
 
 from WebComponent.spider import SpiderFactory
 from WebComponent.fetcher import SingletonBrowser, Proxy
-from ExtractorComponent.processor import ContentProcessor
 from ExtractorComponent.extractor import ContentExtractor
 from dbinterface import DbInterface
 from logger import ScraperLogger
@@ -93,6 +93,9 @@ class Sitemap:
     def empty(self) -> bool:
         return bool(self.heapq.heap_size)
 
+    def count(self) -> int:
+        return self.heapq.heap_size
+
 
 class SingletonSitemap:
     _instance = None
@@ -114,7 +117,6 @@ class SpiderEngine:
         self.browser = await SingletonBrowser.get_instance(proxy.random())
         self.spider = SpiderFactory().create(from_source, proxy.random())
         self.site_map = SingletonSitemap()
-        self.preprocessor = ContentProcessor()
         self.extractor = ContentExtractor()
         self.db = DbInterface()
 
@@ -122,21 +124,33 @@ class SpiderEngine:
         for link in hyper_links:
             self.site_map.insert(link)
 
-    async def run(self, entry_url: str):
+    async def process_url(self, url: str):
+        response = await self.spider.process_request(url, self.proxy.random())
+        response_data = self.spider.process_response(response)
+        self.expand_site_map(response["hyper_links"])
+
+        page_content = self.extractor.extract_content(response_data["html"])
+        await self.db.save(page_content)
+
+    async def run(self, 
+                  entry_url: str, 
+                  max_concurrency: int = 10):
         self.site_map.push(entry_url)
         init_response = await self.spider.process_request(entry_url, self.proxy.random())
         init_response_data = self.spider.process_response(init_response)
         self.expand_site_map(init_response_data["hyper_links"])
+
+        await self.db.connect()
         
         while not self.site_map.empty():
-            url = self.site_map.pop()
-            response = await self.spider.process_request(url, self.proxy.random())
-            response_data = self.spider.process_response(response)
-            self.expand_site_map(response["hyper_links"])
+            tasks = []
+            for _ in range(min(max_concurrency, self.site_map.count())):
+                url = self.site_map.pop()
+                task = self.process_url(url)
+                tasks.append(task)
 
-            content = self.preprocessor.process_content(response_data["html"])
-            true_content = self.extractor.get(content)
-            await self.db.save(true_content)
+            await asyncio.gather(*tasks)
 
     async def close(self):
+        await self.db.close()
         await self.browser.close()
